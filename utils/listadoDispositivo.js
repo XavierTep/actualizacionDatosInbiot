@@ -15,8 +15,7 @@ export async function listadoDispositivo() {
     h.hospital AS n_hospital 
 FROM dispositivos d
 JOIN salas s ON d.sala = s.id
-JOIN hospitales h ON s.hospital = h.id
-WHERE d.id != 5;
+JOIN hospitales h ON s.hospital = h.id;
         `, []);
         return rows;
     } catch (error) {
