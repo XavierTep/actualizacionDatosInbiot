@@ -52,8 +52,15 @@ function buildAlertSMSContent(asunto, alerts) {
     return alertMessage;
 }
 
+function fechaMayorA(update_time,numero) {
+    const actual = new Date();
+    const actualizacion = new Date(update_time);
+    const diferencia = (actual - actualizacion)/ (1000 * 60);
+    return diferencia<numero;
+}
+
 // Cada 10 min (para pruebas, se ejecuta cada minuto: '* * * * *')
-cron.schedule('*/10 * * * *', async () => {
+cron.schedule('* * * * *', async () => {
 
     try {
         // Puedes obtener los dispositivos de la BD con listadoDispositivo() o usar un array de ejemplo:
@@ -70,6 +77,8 @@ cron.schedule('*/10 * * * *', async () => {
         //         n_sala: "PRL 1",
         //         id_hospital: 1,
         //         n_hospital: "Hospital de Toledo"
+        //         update_time: 1640998400000,
+        //         update_peticion: 1640998400000
         //     }
         // ];
 
@@ -77,14 +86,28 @@ cron.schedule('*/10 * * * *', async () => {
         // let num = 1;
         for (const dispositivo of dispositivos) {
             // Se obtiene el último registro de la API Inbiot para el dispositivo
+            if (dispositivo.encendido=="N") {
+                continue;
+            }
+
+            const mayor12 = fechaMayorA(dispositivo.update_time,12);
+
+            const mayor12peticion = fechaMayorA(dispositivo.update_peticion,3);
+
+            // console.log(mayor12,mayor12peticion)
+
+            if (dispositivo.update_time!=null) {
+                if (mayor12 || mayor12peticion) {
+                    continue;
+                }
+            }
+
             try {
 
                 // console.log("------------------------------ " + num + " ---------------------------------------")
                 // console.log("Vamos a buscar el: ", dispositivo.id_dispositivo)
                 const registroOriginal = await getRegistro(dispositivo.referencia, dispositivo.api_key_inbiot);
                 // console.log("Registro API: ", registro)
-
-                
 
                 // console.log("---------------------------------------------------------------------")
                 // num++;
@@ -120,7 +143,7 @@ cron.schedule('*/10 * * * *', async () => {
                                 const textoSMS = buildAlertSMSContent(asunto, alertasUsuario);
 
                                 // Enviar correo con las alertas para ese usuario
-                                const respuesta = await sendEmailSMS(user.email, asunto, textoMail, user.telefono, textoSMS);
+                                // const respuesta = await sendEmailSMS(user.email, asunto, textoMail, user.telefono, textoSMS);
                                 // console.log(respuesta);
                             }
                         }
