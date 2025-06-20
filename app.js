@@ -1,12 +1,13 @@
 import cron from 'node-cron';
 import { listadoDispositivo } from './utils/listadoDispositivo.js';
-import { getRegistro } from './utils/getRegistro.js';
+import { getRegistro, transformAllSensors } from './utils/getRegistro.js';
 import { guardarRegistro } from './utils/guardarRegistro.js';
 import { getUmbrales } from './utils/getUmbrales.js';
 import { comprobarUmbral } from './utils/comprobarUmbral.js';
 import { getAlertaUsuario, getUsuario } from './utils/getAlertaUsuario.js';
 import { guardarAlerta } from './utils/guardarAlerta.js';
 import { sendEmailSMS } from './utils/sendEmailSMS.js';
+import { guardarRegistroAPI } from './utils/guardarRegistroAPI.js';
 
 function buildAlertEmailContent(alerts) {
     // Extraer la fecha de actualización del primer alerta (índice 5) o mostrar mensaje alternativo.
@@ -51,14 +52,21 @@ function buildAlertSMSContent(asunto, alerts) {
     return alertMessage;
 }
 
+function fechaMayorA(update_time,numero) {
+    const actual = new Date();
+    const actualizacion = new Date(update_time);
+    const diferencia = (actual - actualizacion)/ (1000 * 60);
+    return diferencia<numero;
+}
+
 // Cada 10 min (para pruebas, se ejecuta cada minuto: '* * * * *')
-cron.schedule('*/10 * * * *', async () => {
+cron.schedule('* * * * *', async () => {
 
     try {
         // Puedes obtener los dispositivos de la BD con listadoDispositivo() o usar un array de ejemplo:
         /**********************************************************************************************************/
         const dispositivos = await listadoDispositivo();
-        console.log(dispositivos)
+        // console.log(dispositivos)
         // const dispositivos = [
         //     {
         //         id_dispositivo: 5,
@@ -69,63 +77,82 @@ cron.schedule('*/10 * * * *', async () => {
         //         n_sala: "PRL 1",
         //         id_hospital: 1,
         //         n_hospital: "Hospital de Toledo"
+        //         update_time: 1640998400000,
+        //         update_peticion: 1640998400000
         //     }
         // ];
 
         const umbrales = await getUmbrales();
-        let num = 1;
+        // let num = 1;
         for (const dispositivo of dispositivos) {
             // Se obtiene el último registro de la API Inbiot para el dispositivo
-
-
-            if(dispositivo.id_dispositivo == 5){
-                continue
+            if (dispositivo.encendido=="N") {
+                continue;
             }
 
-            console.log("------------------------------ "+num+" ---------------------------------------")
-            console.log("Vamos a buscar el: ",dispositivo.id_dispositivo)
-            const registro = await getRegistro(dispositivo.referencia, dispositivo.api_key_inbiot);
-            console.log("Registro API: ",registro)
-            
-            console.log("---------------------------------------------------------------------")
-            num++;
-            
-            /**********************************************************************************************************/
-            const newID = await guardarRegistro(dispositivo.id_dispositivo, registro);
-            // const newID = 5527;
-            
-            // Obtener usuarios para alerta según la sala del dispositivo
-            const usuariosAlerta = await getAlertaUsuario(dispositivo.id_sala);
-            
-             console.log("Usuario alerta: "+usuariosAlerta)
-             
-             if (usuariosAlerta.length > 0) {
-                 // comprobamos los umbrales y agrupamos las alertas por usuario (clave = usuario_id)
-                 const parametroAlertados = await comprobarUmbral(umbrales, registro, usuariosAlerta, newID);
-                 
-                 console.log("Parametro alertado: "+parametroAlertados)
-                 
-                 // Recorremos cada grupo de alertas por usuario (clave = userId)
-                 for (const userId in parametroAlertados) {
-                     if (Object.hasOwnProperty.call(parametroAlertados, userId)) {
-                         const alertasUsuario = parametroAlertados[userId]; // Array de alertas para ese usuario
-                         // Insertar las alertas en la base de datos
-                         await guardarAlerta(alertasUsuario);
-                         
-                         // Obtener la información del usuario para enviar el correo
-                         const user = await getUsuario(userId);
-                         
-                         if (user.email) {
-                             const asunto = `Alerta en la sala ${dispositivo.n_sala} del ${dispositivo.n_hospital}`;
-                             const textoMail = buildAlertEmailContent(alertasUsuario);
-                             const textoSMS = buildAlertSMSContent(asunto, alertasUsuario);
-                             
-                             // Enviar correo con las alertas para ese usuario
-                            const respuesta = await sendEmailSMS(user.email, asunto, textoMail, user.telefono, textoSMS);
-                            // console.log(respuesta);
+            const mayor12 = fechaMayorA(dispositivo.update_time,12);
+
+            const mayor12peticion = fechaMayorA(dispositivo.update_peticion,3);
+
+            // console.log(mayor12,mayor12peticion)
+
+            if (dispositivo.update_time!=null) {
+                if (mayor12 || mayor12peticion) {
+                    continue;
+                }
+            }
+
+            try {
+
+                // console.log("------------------------------ " + num + " ---------------------------------------")
+                // console.log("Vamos a buscar el: ", dispositivo.id_dispositivo)
+                const registroOriginal = await getRegistro(dispositivo.referencia, dispositivo.api_key_inbiot);
+                // console.log("Registro API: ", registro)
+
+                // console.log("---------------------------------------------------------------------")
+                // num++;
+                const registro = transformAllSensors(registroOriginal);
+                /**********************************************************************************************************/
+                const newID = await guardarRegistro(dispositivo.id_dispositivo, registro);
+                // const newID = 5527;
+                await guardarRegistroAPI(newID, dispositivo.id_dispositivo, registroOriginal);
+                // Obtener usuarios para alerta según la sala del dispositivo
+                const usuariosAlerta = await getAlertaUsuario(dispositivo.id_sala);
+
+                // console.log("Usuario alerta: " + usuariosAlerta)
+
+                if (usuariosAlerta.length > 0) {
+                    // comprobamos los umbrales y agrupamos las alertas por usuario (clave = usuario_id)
+                    const parametroAlertados = await comprobarUmbral(umbrales, registro, usuariosAlerta, newID);
+
+                    // console.log("Parametro alertado: " + parametroAlertados)
+
+                    // Recorremos cada grupo de alertas por usuario (clave = userId)
+                    for (const userId in parametroAlertados) {
+                        if (Object.hasOwnProperty.call(parametroAlertados, userId)) {
+                            const alertasUsuario = parametroAlertados[userId]; // Array de alertas para ese usuario
+                            // Insertar las alertas en la base de datos
+                            await guardarAlerta(alertasUsuario);
+
+                            // Obtener la información del usuario para enviar el correo
+                            const user = await getUsuario(userId);
+
+                            if (user.email) {
+                                const asunto = `Alerta en la sala ${dispositivo.n_sala} del ${dispositivo.n_hospital}`;
+                                const textoMail = buildAlertEmailContent(alertasUsuario);
+                                const textoSMS = buildAlertSMSContent(asunto, alertasUsuario);
+
+                                // Enviar correo con las alertas para ese usuario
+                                const respuesta = await sendEmailSMS(user.email, asunto, textoMail, user.telefono, textoSMS);
+                                // console.log(respuesta);
+                            }
                         }
                     }
                 }
+            }
+            catch (error) {
+                console.error('Error al obtener el registro de la API:', error);
+                continue; // Salta al siguiente dispositivo en caso de error
             }
         }
     } catch (error) {

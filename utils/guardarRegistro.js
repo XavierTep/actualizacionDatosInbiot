@@ -50,6 +50,8 @@ export async function guardarRegistro(dispositivo, sensorsData) {
                 pm1,
                 pm4
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+            update_peticion = NOW()
         `;
 
         // Los valores se extraen de sensorsData. Si no se dispone de algún sensor, se inserta NULL.

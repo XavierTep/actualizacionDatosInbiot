@@ -55,9 +55,9 @@ export async function guardarAlerta(values) {
             if (resultado.length === 0) {
                 // Insertar alerta ya que no se encontró duplicado que cumpla con la condición y registro_id no sea nulo
                 await executeQuery(insertSql, value);
-                console.log(`Insertada alerta para sala_id: ${sala_id}, usuario_id: ${usuario_id}, campo: ${campo}, fecha: ${fecha}, registro_id: ${registro_id}, solventada: ${solventada}`);
+                // console.log(`Insertada alerta para sala_id: ${sala_id}, usuario_id: ${usuario_id}, campo: ${campo}, fecha: ${fecha}, registro_id: ${registro_id}, solventada: ${solventada}`);
             } else {
-                console.log(`Alerta ya activa para sala_id: ${sala_id}, usuario_id: ${usuario_id}, campo: ${campo}, fecha: ${fecha},registro_id : ${registro_id}, solventada : ${solventada} con registro_id ya asignado. No se inserta duplicado.`);
+                // console.log(`Alerta ya activa para sala_id: ${sala_id}, usuario_id: ${usuario_id}, campo: ${campo}, fecha: ${fecha},registro_id : ${registro_id}, solventada : ${solventada} con registro_id ya asignado. No se inserta duplicado.`);
             }
         }
     } catch (error) {
