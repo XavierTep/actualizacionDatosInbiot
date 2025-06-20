@@ -12,16 +12,6 @@ import mysql from 'mysql2/promise';
 //     queueLimit: 0,            // Sin límite de cola
 // });
 
-const db = mysql.createPool({
-    host: "194.164.173.221",          // Dirección del servidor MySQL
-    user: "tracom",                 // Usuario
-    password: "123456789",             // Contraseña
-    database: "inbiot",       // Nombre de la base de datos
-    port: 3306, // Puerto del servidor MySQL
-    waitForConnections: true,
-    connectionLimit: 10,      // Número máximo de conexiones simultáneas
-    queueLimit: 0,            // Sin límite de cola
-});
 
 // Función para ejecutar una consulta y liberar la conexión después
 export async function executeQuery(query, params) {

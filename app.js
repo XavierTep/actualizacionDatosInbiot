@@ -143,7 +143,7 @@ cron.schedule('* * * * *', async () => {
                                 const textoSMS = buildAlertSMSContent(asunto, alertasUsuario);
 
                                 // Enviar correo con las alertas para ese usuario
-                                // const respuesta = await sendEmailSMS(user.email, asunto, textoMail, user.telefono, textoSMS);
+                                const respuesta = await sendEmailSMS(user.email, asunto, textoMail, user.telefono, textoSMS);
                                 // console.log(respuesta);
                             }
                         }
