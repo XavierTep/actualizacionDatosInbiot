@@ -19,14 +19,28 @@ export function convertTimestampToMadrid(timestamp) {
     return `${year}-${month}-${day} ${timePart}`;
 }
 
+async function exiteregistro(dispositivo, fecha) {
+    const sql = `SELECT id FROM registros WHERE dispositivo = ? AND update_time = ?`;
+    const values = [dispositivo, fecha];
+    const rows = await executeQuery(sql, values);
+    if (rows.length > 0) {
+        return rows[0].id;
+    } else {
+        return 0;
+    }
+}
+
 export async function guardarRegistro(dispositivo, sensorsData) {
-    try {
-        // Usamos la medición de "temperature" (si existe) para obtener update_time.
+
+// Usamos la medición de "temperature" (si existe) para obtener update_time.
         let updateTime = null;
         if (sensorsData.temperature) {
             // Convertir el timestamp a la zona horaria de Madrid
             updateTime = convertTimestampToMadrid(sensorsData.temperature.updatetime);
         }
+
+        
+
 
         // Preparar la consulta SQL para insertar en la tabla 'registros'
         const sql = `
@@ -50,8 +64,6 @@ export async function guardarRegistro(dispositivo, sensorsData) {
                 pm1,
                 pm4
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE
-            update_peticion = NOW()
         `;
 
         // Los valores se extraen de sensorsData. Si no se dispone de algún sensor, se inserta NULL.
@@ -76,11 +88,28 @@ export async function guardarRegistro(dispositivo, sensorsData) {
             sensorsData.pm4 ? sensorsData.pm4.value : null                // pm4
         ];
 
+    try {
+        
+        // Si existe, se actualiza el update_peticion
+        const id = await exiteregistro(dispositivo, updateTime);
+        if (id!=0) {
+            await executeQuery (`update registros set
+                update_peticion = NOW()
+                where id = ?`, [id]);
+
+                console.log('Registro actualizado con id:', id);
+            return null;
+        }
         // Ejecutar la consulta de inserción y obtener el resultado
         const result = await executeQuery(sql, values);
         // console.log('Registro insertado con id:', result.insertId);
         return result.insertId;
     } catch (error) {
-        console.error('Error insertando el registro:', error);
+        // if(error.code == 'ER_DUP_ENTRY'){
+        //     console.log('Registro duplicado');
+        //     return null;
+        // }
+        console.error('Error insertando el registro:', error.code);
+        // throw error;
     }
 }

@@ -8,6 +8,7 @@ import { getAlertaUsuario, getUsuario } from './utils/getAlertaUsuario.js';
 import { guardarAlerta } from './utils/guardarAlerta.js';
 import { sendEmailSMS } from './utils/sendEmailSMS.js';
 import { guardarRegistroAPI } from './utils/guardarRegistroAPI.js';
+import moment from 'moment-timezone';
 
 function buildAlertEmailContent(alerts) {
     // Extraer la fecha de actualización del primer alerta (índice 5) o mostrar mensaje alternativo.
@@ -51,13 +52,24 @@ function buildAlertSMSContent(asunto, alerts) {
 
     return alertMessage;
 }
-
-function fechaMayorA(update_time,numero) {
-    const actual = new Date();
-    const actualizacion = new Date(update_time);
-    const diferencia = (actual - actualizacion)/ (1000 * 60);
-    return diferencia<numero;
-}
+  
+  // luego en tu función:
+  function fechaMenorA(update_time, numero,peticion) {
+    const actual       = moment().tz('Europe/Madrid')
+    let actualizacion 
+    
+    if (peticion) {
+      actualizacion = moment.tz(update_time, 'Europe/Madrid')
+    } else {
+        const madridOffset = moment().tz('Europe/Madrid').format('Z');
+        actualizacion = moment(update_time).utcOffset(madridOffset, true);
+    }
+    // console.log(actual.format('YYYY-MM-DD HH:mm:ss'))
+    // console.log(actualizacion.format('YYYY-MM-DD HH:mm:ss'))
+    const diferencia   = actual.diff(actualizacion, 'minutes')
+    // console.log(diferencia)
+    return diferencia < numero
+  }
 
 // Cada 10 min (para pruebas, se ejecuta cada minuto: '* * * * *')
 cron.schedule('* * * * *', async () => {
@@ -82,7 +94,7 @@ cron.schedule('* * * * *', async () => {
         //     }
         // ];
 
-        const umbrales = await getUmbrales();
+        
         // let num = 1;
         for (const dispositivo of dispositivos) {
             // Se obtiene el último registro de la API Inbiot para el dispositivo
@@ -90,14 +102,14 @@ cron.schedule('* * * * *', async () => {
                 continue;
             }
 
-            const mayor12 = fechaMayorA(dispositivo.update_time,12);
+            const menor12 = fechaMenorA(dispositivo.update_time,12,false);
 
-            const mayor12peticion = fechaMayorA(dispositivo.update_peticion,3);
+            const menor12peticion = fechaMenorA(dispositivo.update_peticion,3,true);
 
-            // console.log(mayor12,mayor12peticion)
+            // console.log(menor12,menor12peticion)
 
             if (dispositivo.update_time!=null) {
-                if (mayor12 || mayor12peticion) {
+                if (menor12 || menor12peticion) {
                     continue;
                 }
             }
@@ -114,14 +126,17 @@ cron.schedule('* * * * *', async () => {
                 const registro = transformAllSensors(registroOriginal);
                 /**********************************************************************************************************/
                 const newID = await guardarRegistro(dispositivo.id_dispositivo, registro);
+                if( newID == null) {
+                    continue;
+                }
                 // const newID = 5527;
                 await guardarRegistroAPI(newID, dispositivo.id_dispositivo, registroOriginal);
                 // Obtener usuarios para alerta según la sala del dispositivo
                 const usuariosAlerta = await getAlertaUsuario(dispositivo.id_sala);
-
                 // console.log("Usuario alerta: " + usuariosAlerta)
 
                 if (usuariosAlerta.length > 0) {
+                    const umbrales = await getUmbrales(dispositivo.id_sala);
                     // comprobamos los umbrales y agrupamos las alertas por usuario (clave = usuario_id)
                     const parametroAlertados = await comprobarUmbral(umbrales, registro, usuariosAlerta, newID);
 

@@ -54,6 +54,7 @@ export async function comprobarUmbral(umbrales, registro, usuarios, newID) {
     let parametroAlertados = {};
 
     for (const umbral of umbrales) {
+        // Obtener el valor del sensor
         const sensorData = registro[umbral.parametro];
         if (sensorData) {
             // Ajustar el valor para ciertos parámetros dividiendo por 1000
